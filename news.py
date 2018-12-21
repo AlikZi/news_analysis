@@ -46,10 +46,11 @@ HTML_WRAP = '''\
 '''
 
 ARTICLE = '''<li>"%s" - %d views</li>'''
-AUTHORS = '''<li>author name - number</li>'''
-BAD_REQUESTS = '''<li>day - percentage</li>'''
+AUTHOR = '''<li>%s - %d views</li>'''
+BAD_REQUEST = '''<li>%s - %s%%</li>'''
 
 def get_articles():
+	#returns most popular articles that were accessed from news database
 	db = psycopg2.connect("dbname=news")
 	cur = db.cursor()
 	cur.execute("select articles.title, count(*) as views" 
@@ -61,12 +62,42 @@ def get_articles():
 	return cur.fetchall()
 	db.close()
 
+def get_authors():
+	#returns most popular authors by articles that were accessed from news database
+	db = psycopg2.connect("dbname=news")
+	cur = db.cursor()
+	cur.execute("select authors.name, count(*) as views" 
+				 + " from log, articles, authors" 
+				 + " where authors.id=articles.author and "
+				 + " substring(log.path from 10)=articles.slug" 
+				 + " group by authors.name" 
+				 + " order by views desc;")
+	return cur.fetchall()
+	db.close()
+
+def get_errordays():
+	db = psycopg2.connect("dbname=news")
+	cur = db.cursor()
+	cur.execute("select to_char(tlogs.date, 'Mon DD, YYYY'),"
+				 + " round((cast(errors.num as DECIMAL(7,2))/cast(tlogs.num" 
+				 + " as DECIMAL(7,2))*100),2) as percentage" 
+				 + " from (select time::timestamp::date as date,"
+				 + " count(*) as num from log group by date) as tlogs,"
+				 + "(select time::timestamp::date as date,"
+				 + " count(*) as num from log" 
+				 + " where status like '%%404%%' group by date) as errors"
+				 + " where tlogs.date=errors.date and"
+				 + " (cast(errors.num as DECIMAL(7,2))/cast(tlogs.num as DECIMAL(7,2))*100)>1;")
+	return cur.fetchall()
+	db.close()
 
 @app.route('/', methods=['GET'])
 def main():
 	'''main page of news'''
 	articles = "".join(ARTICLE % (title, views) for (title, views) in get_articles())
-	html = HTML_WRAP % (articles, AUTHORS, BAD_REQUESTS)
+	authors = "".join(AUTHOR % (name, views) for (name, views) in get_authors())
+	bad_requests = "".join(BAD_REQUEST % (day, num) for (day, num) in get_errordays())
+	html = HTML_WRAP % (articles, authors, bad_requests)
 	return html
 
 if __name__=='__main__':
