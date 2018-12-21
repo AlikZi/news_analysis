@@ -2,6 +2,7 @@
 #Log Analysis Project made by Aleksandr Zonis
 
 from flask import Flask
+import psycopg2
 
 app = Flask(__name__)
 
@@ -44,14 +45,28 @@ HTML_WRAP = '''\
 </html>
 '''
 
-ARTICLES = '''<li>article name - views</li>'''
+ARTICLE = '''<li>"%s" - %d views</li>'''
 AUTHORS = '''<li>author name - number</li>'''
 BAD_REQUESTS = '''<li>day - percentage</li>'''
+
+def get_articles():
+	db = psycopg2.connect("dbname=news")
+	cur = db.cursor()
+	cur.execute("select articles.title, count(*) as views" 
+				 + " from log, articles" 
+				 + " where substring(log.path from 10)=articles.slug" 
+				 + " group by articles.title" 
+				 + " order by views desc"
+ 				 + " limit 3;")
+	return cur.fetchall()
+	db.close()
+
 
 @app.route('/', methods=['GET'])
 def main():
 	'''main page of news'''
-	html = HTML_WRAP % (ARTICLES, AUTHORS, BAD_REQUESTS)
+	articles = "".join(ARTICLE % (title, views) for (title, views) in get_articles())
+	html = HTML_WRAP % (articles, AUTHORS, BAD_REQUESTS)
 	return html
 
 if __name__=='__main__':
