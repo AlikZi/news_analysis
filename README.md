@@ -1,0 +1,1 @@
+/*README.md for Log Analysis Project for UDACITY*/
